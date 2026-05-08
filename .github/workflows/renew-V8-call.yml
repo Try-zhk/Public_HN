@@ -1,4 +1,4 @@
-Name: E-VPS-Auto-TaskC
+name: E-VPS-Auto-TaskC
 
 on:
   schedule:
@@ -53,7 +53,7 @@ jobs:
               set_skip("false")
           '
 
-      # ================= 私库拉取模块 (已取消删除逻辑) =================
+      # ================= 私库拉取模块 =================
       - name: Fetch Private Core Code
         if: env.SKIP_RUN != 'true'
         env:
@@ -84,8 +84,8 @@ jobs:
           tar -xzf core_code.tar.gz -C temp_core --strip-components=1
           rm -rf temp_core/.github
           cp -a temp_core/. ./
-          # 删除了 rm -rf temp_core core_code.tar.gz
-          echo "文件已解压并保留在目录中"
+          # 保留文件供后续 Commit
+          echo "核心代码已解压并准备同步到仓库。"
       # ====================================================
 
       - uses: actions/setup-python@v5
@@ -136,11 +136,11 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: xvfb-run -a python app.py
 
-      - name: Commit and Push All Changes
+      - name: Commit All Downloaded Files
         if: env.SKIP_RUN != 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: 同步最新代码与状态文件"
+          commit_message: "chore: 同步所有文件到仓库"
           file_pattern: '.'
 
       - name: Upload Screenshots
@@ -151,14 +151,23 @@ jobs:
           path: screenshots/
           retention-days: 7
 
-      # 自动清理历史成功的运行记录，保持 Action 界面整洁
-      - name: Cleanup Success Runs
+      # 优化后的清理逻辑：跳过当前运行 ID，避免“自杀”
+      - name: 🗑️ 安全清理历史记录
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "正在清理成功的历史记录..."
+          CURRENT_RUN_ID=${{ github.run_id }}
+          echo "当前运行 ID: $CURRENT_RUN_ID，正在清理其他成功的历史记录..."
+          
+          # 获取前 50 条成功的记录 ID
           runs=$(gh run list --workflow "E-VPS-Auto-TaskC" --status success --limit 50 --json databaseId -q '.[].databaseId')
+          
           for id in $runs; do
-            gh run delete $id
+            if [ "$id" != "$CURRENT_RUN_ID" ]; then
+              echo "正在删除旧记录: $id"
+              gh run delete $id
+            else
+              echo "跳过当前运行记录: $id"
+            fi
           done
