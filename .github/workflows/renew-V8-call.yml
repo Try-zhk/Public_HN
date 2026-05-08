@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   run:
@@ -84,8 +83,7 @@ jobs:
           tar -xzf core_code.tar.gz -C temp_core --strip-components=1
           rm -rf temp_core/.github
           cp -a temp_core/. ./
-          # 保留文件供后续 Commit
-          echo "核心代码已解压并准备同步到仓库。"
+          rm -rf temp_core core_code.tar.gz
       # ====================================================
 
       - uses: actions/setup-python@v5
@@ -136,12 +134,12 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: xvfb-run -a python app.py
 
-      - name: Commit All Downloaded Files
+      - name: Commit state.json
         if: env.SKIP_RUN != 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: 同步所有文件到仓库"
-          file_pattern: '.'
+          commit_message: "chore: update state.json"
+          file_pattern: state.json
 
       - name: Upload Screenshots
         uses: actions/upload-artifact@v4
@@ -150,24 +148,3 @@ jobs:
           name: screenshots-${{ github.run_number }}
           path: screenshots/
           retention-days: 7
-
-      # 优化后的清理逻辑：跳过当前运行 ID，避免“自杀”
-      - name: 🗑️ 安全清理历史记录
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          CURRENT_RUN_ID=${{ github.run_id }}
-          echo "当前运行 ID: $CURRENT_RUN_ID，正在清理其他成功的历史记录..."
-          
-          # 获取前 50 条成功的记录 ID
-          runs=$(gh run list --workflow "E-VPS-Auto-TaskC" --status success --limit 50 --json databaseId -q '.[].databaseId')
-          
-          for id in $runs; do
-            if [ "$id" != "$CURRENT_RUN_ID" ]; then
-              echo "正在删除旧记录: $id"
-              gh run delete $id
-            else
-              echo "跳过当前运行记录: $id"
-            fi
-          done
