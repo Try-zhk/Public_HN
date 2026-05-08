@@ -1,4 +1,4 @@
-name: E-VPS-Auto-TaskC
+Name: E-VPS-Auto-TaskC
 
 on:
   schedule:
@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   run:
@@ -52,7 +53,7 @@ jobs:
               set_skip("false")
           '
 
-      # ================= 私库拉取模块 =================
+      # ================= 私库拉取模块 (已取消删除逻辑) =================
       - name: Fetch Private Core Code
         if: env.SKIP_RUN != 'true'
         env:
@@ -83,7 +84,8 @@ jobs:
           tar -xzf core_code.tar.gz -C temp_core --strip-components=1
           rm -rf temp_core/.github
           cp -a temp_core/. ./
-          rm -rf temp_core core_code.tar.gz
+          # 删除了 rm -rf temp_core core_code.tar.gz
+          echo "文件已解压并保留在目录中"
       # ====================================================
 
       - uses: actions/setup-python@v5
@@ -134,12 +136,12 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: xvfb-run -a python app.py
 
-      - name: Commit state.json
+      - name: Commit and Push All Changes
         if: env.SKIP_RUN != 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: update state.json"
-          file_pattern: state.json
+          commit_message: "chore: 同步最新代码与状态文件"
+          file_pattern: '.'
 
       - name: Upload Screenshots
         uses: actions/upload-artifact@v4
@@ -148,3 +150,15 @@ jobs:
           name: screenshots-${{ github.run_number }}
           path: screenshots/
           retention-days: 7
+
+      # 自动清理历史成功的运行记录，保持 Action 界面整洁
+      - name: Cleanup Success Runs
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "正在清理成功的历史记录..."
+          runs=$(gh run list --workflow "E-VPS-Auto-TaskC" --status success --limit 50 --json databaseId -q '.[].databaseId')
+          for id in $runs; do
+            gh run delete $id
+          done
